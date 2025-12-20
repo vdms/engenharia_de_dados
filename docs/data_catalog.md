@@ -89,7 +89,14 @@ Definition:
 - Meaning: Standardized age groups for analysis
 - Type: string
 - Domain:
-  - `Até 19`, `20–29`, `30–39`, `40–49`, `50–59`, `60+`, `Desconhecida`
+  - `<20`
+  - `20–29`
+  - `30–39`
+  - `40–49`
+  - `50–59`
+  - `60+`
+  - `Not informed`
+
 - Quality checks:
   - Not null
   - Values must be in the allowed domain list
@@ -150,13 +157,17 @@ Definition:
 
 ---
 
-## Unused Columns Kept for Context (Raw only)
+## Additional Columns and Analytical Usage
 
-The following fields were kept in Bronze (and optionally Silver) for documentation, but not used in the final analytical questions:
+The following fields were retained from the source and treated as follows:
 
-- `FORMA_INICIACAO` — initiation method (context only)
-- `PAG_PFPJ` — payer type (PF/PJ)
-- `REC_PFPJ` — receiver type (PF/PJ)
+- `FORMA_INICIACAO`  
+  - Used analytically in the Gold layer as a dedicated dimension (`dim_forma_iniciacao`).
+
+- `PAG_PFPJ`, `REC_PFPJ`  
+  - Retained for documentation and potential future enrichment.
+  - Not used in the current analytical model.
 
 Rationale:
-- They may support future segmentation, but were not necessary for the current MVP questions.
+- The MVP focuses on behavioral and regional analysis.
+- Some attributes were preserved to keep the pipeline extensible without overcomplicating the current scope.

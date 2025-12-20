@@ -1,154 +1,276 @@
 # Data Engineering MVP — PIX
 
+## Summary
+
+- [Data Engineering MVP — PIX](#data-engineering-mvp--pix)
+  - [Summary](#summary)
+  - [Overview](#overview)
+  - [Project Context](#project-context)
+  - [Objective](#objective)
+  - [Business Questions](#business-questions)
+  - [Dataset Used](#dataset-used)
+  - [Data Pipeline Architecture](#data-pipeline-architecture)
+    - [Bronze — Raw Data](#bronze--raw-data)
+    - [Silver — Processed Data](#silver--processed-data)
+    - [Gold — Analytical Model](#gold--analytical-model)
+  - [Data Model (Gold)](#data-model-gold)
+    - [Fact Table](#fact-table)
+    - [Dimensions](#dimensions)
+  - [Analytical Evidence (Business Questions)](#analytical-evidence-business-questions)
+    - [Q1 — Monthly evolution and most active age groups](#q1--monthly-evolution-and-most-active-age-groups)
+    - [Q2 — Payer vs receiver age-group interactions](#q2--payer-vs-receiver-age-group-interactions)
+    - [Q3 — Transaction purpose by payer age group](#q3--transaction-purpose-by-payer-age-group)
+    - [Q4 — Regional differences by transaction nature](#q4--regional-differences-by-transaction-nature)
+    - [Q5 — Most common usage patterns (age × nature × purpose)](#q5--most-common-usage-patterns-age--nature--purpose)
+    - [Q6 — Payer vs receiver profiles across regions](#q6--payer-vs-receiver-profiles-across-regions)
+    - [Q7 — Regional concentration (value vs transaction count)](#q7--regional-concentration-value-vs-transaction-count)
+  - [Data Quality and Validation](#data-quality-and-validation)
+  - [Conclusion and Limitations](#conclusion-and-limitations)
+  - [Self-Assessment](#self-assessment)
+  - [Future Work](#future-work)
+  - [Final Note](#final-note)
+  - [Author](#author)
+
+
 ## Overview
 
-This repository contains the **Data Engineering MVP** developed for the Data Science and Analytics program. The objective is to build a complete cloud-based data pipeline using public data from the Central Bank of Brazil related to the PIX instant payment system.
+This repository contains a **Data Engineering MVP** built to demonstrate an end-to-end analytical pipeline using public data from the Central Bank of Brazil related to the **PIX instant payment system**.
 
-The project prioritizes **clarity, organization, and end-to-end understanding**, focusing on a functional and well-documented pipeline rather than overly complex technical solutions.
+The project emphasizes:
+- clear separation of data layers (Bronze → Silver → Gold),
+- explicit analytical scope control,
+- reproducible data quality checks,
+- and transparent analytical limitations.
+
+The goal is not to maximize technical complexity, but to deliver a **correct, explainable, and well-documented analytical pipeline**.
+
 
 ## Project Context
 
-The MVP is set in a governmental context, with the **Central Bank of Brazil** as the primary stakeholder. The analysis focuses on **PIX user behavior**, aiming to identify usage patterns over time, differences across user profiles, and regional variations.
+The MVP is framed in a public-sector context, with the **Central Bank of Brazil** as the primary data provider.
 
-Although it applies standard Data Engineering concepts and tools, the project was developed by a professional with a design background, emphasizing conceptual understanding, information organization, and data flow comprehension over advanced technical depth.
+The analysis focuses on **aggregated PIX usage patterns**, exploring how transaction behavior varies over time, across user profiles, and between regions, using only officially published open data.
+
 
 ## Objective
 
-Analyze PIX user behavior using open data from the Central Bank of Brazil, identifying usage patterns by age group, region, transaction nature, and purpose. The analysis explores differences between payer and receiver profiles and how these patterns evolve over time, supporting exploratory insights potentially relevant to public policy discussions.
+Analyze PIX usage behavior using aggregated monthly data from the Central Bank of Brazil, identifying patterns by:
+
+- age group,
+- region,
+- transaction nature,
+- transaction purpose,
+- payer vs receiver roles.
+
+The project prioritizes analytical correctness and methodological clarity, supporting exploratory insights that could inform public-policy discussions.
+
 
 ## Business Questions
 
-> Note: Some questions may require external enrichment beyond the PIX aggregated dataset. These will be addressed transparently in the conclusion section of the analysis notebook.
-
+The following business questions guide the analytical exploration of this MVP:
 
 1. Which age groups most frequently make PIX payments, and how does this pattern evolve over time?  
-2. Are there relevant differences between payers and receivers in terms of age and transaction volume?  
+2. Are there relevant differences between payers and receivers in terms of age distribution and transaction volume?  
 3. How does transaction purpose vary across different age groups?  
-4. Are there regional differences in PIX usage considering purpose, nature, and volume?  
-5. Which combinations of age, nature, and purpose represent the most common PIX usage patterns?  
-6. What is the income level of the most active PIX users?  
-7. Do users primarily use PIX for essential or non-essential expenses?
+4. Are there regional differences in PIX usage considering transaction purpose, nature, and volume?  
+5. Which combinations of age group, transaction nature, and transaction purpose represent the most common PIX usage patterns?  
+6. How does the distribution of PIX usage differ between payer and receiver profiles across regions and age groups?  
+7. How concentrated is PIX usage across regions when comparing total transaction value and transaction count?  
+8. What is the income level of the most active PIX users?  
+9. Do users primarily use PIX for essential or non-essential expenses?
+
 
 ## Dataset Used
 
 **Source:** Central Bank of Brazil — PIX Open Data (Olinda API)
 
-![Screenshot of the Brazilian Central Bank’s Olinda data platform showing the “PIX Statistics – v1” interface, with filters for year, record limit, output format (CSV), selectable fields such as payer/receiver type, region, and age, and an auto-generated API query URL with options to copy, download, or execute the request.](images/00_olinda_endpoint.png)
+![PIX Olinda API endpoint](images/00_olinda_endpoint.png)
 
-API endpoint (example):
-- Service: Pix_DadosAbertos / EstatisticasTransacoesPix
-- Format: CSV
-- Parameters: year (Database), select columns, top=50000
+The analysis uses **aggregated monthly PIX statistics** for:
 
-> https://olinda.bcb.gov.br/olinda/servico/Pix_DadosAbertos/versao/v1/odata/EstatisticasTransacoesPix(Database=@Database)?@Database='2024'&$top=50000&$format=text/csv&$select=AnoMes,PAG_PFPJ,REC_PFPJ,PAG_REGIAO,REC_REGIAO,PAG_IDADE,REC_IDADE,FORMAINICIACAO,NATUREZA,FINALIDADE,VALOR,QUANTIDADE
+- **2023**
+- **2024**
 
-The analysis uses aggregated monthly data for **2023 and 2024**, max of 50,000 entries each, stored in two CSV files:
+Each year was ingested separately (maximum 50,000 rows per extract) and stored as CSV files:
 
-- `pix_2023.csv`  
+- `pix_2023.csv`
 - `pix_2024.csv`
 
-Databricks Volumes were used to store the raw PIX files as ingested from the public API, preserving the original file structure and enabling controlled, repeatable processing into Bronze tables.
+Although the raw files may contain records outside the target period, the analytical scope of this MVP was **explicitly restricted to January 2023 through December 2024**, enforced in the Silver layer.
 
-Although the original PIX files contain records outside the target period, the analytical scope of this MVP was explicitly constrained to transactions between January 2023 and December 2024. This filtering step was applied in the Silver layer to ensure consistency between the project objectives and the data effectively analyzed.
-
-
-### Main columns used
-
-- `AnoMes`  
-- `PAG_IDADE`  
-- `REC_IDADE`  
-- `PAG_REGIAO`  
-- `REC_REGIAO`  
-- `NATUREZA`  
-- `FINALIDADE`  
-- `QUANTIDADE`  
-- `VALOR`
-
-Additional columns (`FORMA_INICIACAO`, `PAG_PFPJ`, `REC_PFPJ`) were retained for documentation and context only and were not used in the final analyses.
 
 ## Data Pipeline Architecture
 
-The pipeline is organized into three layers:
+![Pipeline diagram](images/01_pipeline.png)
 
-### Bronze — Raw Data  
-Stores the data exactly as obtained, without transformations, preserving the original source and enabling reprocessing.
+The pipeline follows a layered architecture:
 
-### Silver — Processed Data  
-Contains unified and standardized data, with adjusted data types and organized columns, prepared for analytical modeling.
+### Bronze — Raw Data
+Stores the original CSV files exactly as retrieved from the public API, enabling traceability and reprocessing.
 
-### Gold — Analytical Model  
-Provides the final analytical view, structured as a **star schema** with dimension tables and a fact table, enabling efficient querying and analysis.
+### Silver — Processed Data
+Applies:
+- schema normalization,
+- data type enforcement (e.g. monetary values as `decimal(18,2)`),
+- categorical standardization,
+- and strict scope filtering (2023–2024).
 
-## Data Model
+### Gold — Analytical Model
+Implements a **star schema**, optimized for analytical queries and business exploration.
 
-The analytical model follows the **Star Schema** pattern and includes:
+## Data Model (Gold)
 
-**Fact Table**
-- `fato_transacoes_pix`
+The analytical model is implemented as a **star schema**, designed to support consistent aggregations and exploratory analysis.
 
-**Dimensions**
-- `dim_tempo`  
-- `dim_usuario` (used for both payer and receiver)  
-- `dim_regiao` (with role distinction: payer or receiver)  
-- `dim_natureza`  
-- `dim_finalidade`  
+Detailed documentation is available in the following files:
+- 📘 **Star Schema Modeling:** [`docs/star_modeling.md`](docs/star_modeling.md)
+- 📗 **Data Catalog and Domains:** [`docs/data_catalog.md`](docs/data_catalog.md)
 
-This structure supports temporal analysis, user profile comparisons, and aggregations across multiple dimensions.
+![Star schema diagram](images/02_star.png)
 
-## Databricks Organization
 
-The project uses **Unity Catalog** with the following structure:
+### Fact Table
+- `fato_transacoes_pix`  
+  Aggregated monthly PIX activity with transaction count and total value.
 
-- **Catalog:** `mvp_pix`  
-- **Schema:** `bronze, silver, gold`  
-- **Volume (Bronze):** `/Volumes/mvp_pix/dados/bronze/`
+### Dimensions
+- `dim_tempo`
+- `dim_usuario` (used for both payer and receiver)
+- `dim_regiao` (role-aware: payer / receiver)
+- `dim_natureza`
+- `dim_finalidade`
+- `dim_forma_iniciacao`
 
-## Repository Structure
-```
-├── notebooks/
-│ ├── 00_context_and_setup
-│ ├── 01_bronze_ingestion_raw
-│ ├── 02_silver_cleaning_standardization
-│ ├── 03_gold_star_schema_modeling
-│ ├── 04_data_quality
-│ ├── 05_analysis_questions_business
-│ └── 06_conclusion
-├── docs/
-│ ├── modelo_estrela
-│ └── catalogo_dados
-└── README.md
-```
+This structure supports temporal analysis, profile comparison, regional segmentation, and concentration studies.
 
-## Pipeline Validation and Evidence
+---
 
-This section presents execution and data quality evidence generated during the MVP development, supporting the correctness and consistency of the pipeline.
+## Analytical Evidence (Business Questions)
 
-### Analytical Scope Validation (2023–2024)
+All analytical evidence was generated from the **Gold layer** using the notebook `05_analysis_questions_business`.
 
-The analytical scope was explicitly enforced in the Silver layer.  
-The output below confirms that only records between January 2023 and December 2024 were kept.
+### Q1 — Monthly evolution and most active age groups
 
-![Silver scope validation](images/02_scope_min-max.png)
+![Q1 monthly transactions](images/q1--transactions.png)  
+![Q1 total value](images/q1--total_value.png)  
+![Q1 top payer age groups](images/q1--table--01.png)
 
-### Core Data Quality Checks
+---
 
-Basic data quality validations were executed to ensure consistency of critical fields such as transaction value, quantity, age groups, and regions.
+### Q2 — Payer vs receiver age-group interactions
 
-![Null and negative value checks](images/03_null_checks--01.png)
-![Null and negative value checks](images/03_null_checks--02.png)
-![Null and negative value checks](images/05_negative_values.png)
-![Null and negative value checks](images/06_domain_check_age--01.png)
-![Null and negative value checks](images/06_domain_check_age--02.png)
-![Null and negative value checks](images/06_domain_check_age--03.png)
+![Q2 payer vs receiver age combinations](images/q2--table.png)
 
-### Gold Layer Integrity
+---
 
-The Gold fact table was validated to ensure that all foreign keys were populated, confirming consistent joins with all dimensions.
+### Q3 — Transaction purpose by payer age group
 
-![Gold foreign key validation](images/04_gold_FK--01.png)
-![Gold foreign key validation](images/04_gold_FK--02.png)
+![Q3 purpose by age group](images/q3--total_transactions_by_purpose_per_payer_age_group.png)
+
+---
+
+### Q4 — Regional differences by transaction nature
+
+![Q4 top transaction nature by payer region](images/q4--top_transaction_nature_by_payer_region.png)
+
+---
+
+### Q5 — Most common usage patterns (age × nature × purpose)
+
+![Q5 most common usage patterns](images/q5--table.png)
+
+---
+
+### Q6 — Payer vs receiver profiles across regions
+
+![Q6 payer vs receiver by region](images/q6--payer_receiver_by_region.png)
+
+---
+
+### Q7 — Regional concentration (value vs transaction count)
+
+![Q7 regional concentration](images/q7--share-value-transaction.png)
+
+
+
+## Data Quality and Validation
+
+Data quality validations were implemented in a dedicated notebook (`04_data_quality`) and executed across all pipeline layers (Bronze, Silver, and Gold).
+
+The validation strategy focuses on **analytical correctness rather than exhaustive rule enumeration**, and includes:
+
+- **Temporal scope validation**  
+  Verification that all analytical tables are strictly restricted to the 2023–2024 period, including cross-checks between Silver data and the Gold time dimension.
+
+- **Row count reconciliation across layers**  
+  Comparative counts between Bronze, Silver, and Gold to ensure that transformations and aggregations behave as expected, without unintended data loss or duplication.
+
+- **Data type enforcement**  
+  Explicit validation that monetary values are stored as `decimal(18,2)` in the Silver and Gold layers, preventing floating-point inaccuracies.
+
+- **Null and negative value checks**  
+  Detection of unexpected nulls and invalid negative values in key analytical fields (transaction count and total value).
+
+- **Domain validation in the Gold layer**  
+  Verification that categorical domains (such as age groups) are enforced at the dimensional level, ensuring semantic consistency for analytical use.
+
+- **Referential integrity checks**  
+  Confirmation that all foreign keys in the Gold fact table are non-null and correctly mapped to their respective dimensions.
+
+These checks collectively ensure that the analytical results presented in this MVP are **structurally sound, semantically consistent, and reproducible**.
+
+
+## Conclusion and Limitations
+
+This MVP successfully addressed **7 out of the 9 proposed business questions** using the available aggregated PIX dataset for the 2023–2024 period.
+
+Two questions could not be answered within the current scope:
+
+- **Income level of PIX users**  
+  The dataset does not include income information or reliable proxies. Answering this question would require external socioeconomic enrichment (e.g. IBGE data).
+
+- **Essential vs non-essential expenses**  
+  While transaction nature and purpose are available, there is no official classification distinguishing essential from non-essential expenses. Addressing this question would require an explicit semantic classification layer.
+
+These limitations stem from **source data constraints**, not from pipeline design.
+
+
+## Self-Assessment
+
+This project represented a significant learning challenge, particularly due to my first hands-on experience with Databricks as an end-to-end data engineering platform. One of the initial difficulties was related to data ingestion: I initially attempted to create tables directly instead of correctly configuring and using volumes, which led to execution issues and required revisiting fundamental platform concepts. Resolving this early mistake was an important step in understanding how Databricks manages storage, data access, and persistence across pipeline layers.
+
+Throughout the development process, maintaining consistency across the Bronze, Silver, and Gold layers proved to be a continuous challenge. Enforcing data types, analytical scope, and semantic consistency required multiple iterations, especially when refining the Silver layer to properly support downstream analytical modeling. This reinforced the importance of the Silver layer as the point where business rules and data contracts must be explicitly enforced.
+
+The use of Databricks’ built-in AI assistance played a meaningful role in accelerating development. It was particularly helpful for SQL formulation, schema inspection, and iterative refinement of transformations. While it did not replace critical thinking or design decisions, it proved to be an effective support tool when used deliberately and critically.
+
+Another practical difficulty involved the generation of analytical visualizations. Some queries produced outputs that were not easily compatible with the Databricks visualization interface due to cardinality, dimensionality, or formatting constraints. As a result, several analyses required adjustments to favor clear tabular evidence over complex charts. This experience highlighted the importance of designing analytical outputs with the visualization medium in mind, especially in constrained environments.
+
+Despite these challenges, the project successfully met its objectives. It enabled me to consolidate core data engineering concepts in practice, including layered architecture, data quality validation, dimensional modeling, and analytical scope management. More importantly, it strengthened my ability to reason about trade-offs, limitations, and design decisions in real-world data pipelines.
+
+As a result, this MVP represents not only a functional technical deliverable, but also a concrete learning milestone in applying data engineering principles in a cloud-based analytical environment.
+
+
+## Future Work
+
+Potential extensions of this project include:
+
+- Integration of external socioeconomic datasets (e.g., IBGE indicators) to enrich analytical capabilities.
+- Expansion of the data quality framework with automated alerts and thresholds.
+- Exploration of finer temporal granularity, such as daily or hourly data, if available.
+- Development of interactive dashboards or geospatial analyses based on the existing Gold model.
+
+These extensions would build upon the existing foundation without altering the core principles established in this MVP.
 
 
 ## Final Note
 
-This MVP represents a functional and well-documented data pipeline built with a focus on learning, clarity, and best practices. It does not aim to exhaust all analytical possibilities of the dataset, but to demonstrate a solid understanding of the complete data engineering process, from data collection to analysis.
+This MVP is based on **aggregated monthly data**, not transaction-level records.
+
+All findings reflect **grouped behavioral patterns** and should be interpreted at an aggregate level.
+
+The project emphasizes **pipeline correctness, analytical modeling, and transparent limitations**, aligning with the objectives of a data engineering MVP.
+
+
+## Author
+Vicente d'Avila Melo Sarmento
+Pós-Graduação em Ciência de Dados & Analytics — PUC-Rio
