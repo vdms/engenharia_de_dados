@@ -273,4 +273,5 @@ The project emphasizes **pipeline correctness, analytical modeling, and transpar
 
 ## Author
 Vicente d'Avila Melo Sarmento
+
 Pós-Graduação em Ciência de Dados & Analytics — PUC-Rio
